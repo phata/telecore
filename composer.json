@@ -21,7 +21,8 @@
     },
     "require-dev": {
         "kahlan/kahlan": "^4.0",
-        "symfony/dotenv": "^4.0"
+        "symfony/dotenv": "^4.0",
+        "monolog/monolog": "^1.23"
     },
     "scripts": {
         "test": [
