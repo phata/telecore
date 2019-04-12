@@ -2,14 +2,20 @@
 
 namespace Phata\TeleCore;
 
+use Psr\Container\ContainerInterface;
+use Psr\Container\NotFoundExceptionInterface;
 use Psr\Log\LoggerInterface;
 use TelegramBot\Api\BotApi;
 use Phata\TeleCore\Session\Factory as SessionFactory;
+use \Exception;
+use \ReflectionFunction;
+use \ReflectionParameter;
 
 class Dispatcher
 {
     private $_cmds = [];
     private $_handlers = [];
+    private $_container = null;
     private $_sessionFactory = null;
     private $_logger = null;
 
@@ -41,6 +47,11 @@ class Dispatcher
     public function setLogger(LoggerInterface $logger)
     {
         $this->_logger = $logger;
+    }
+
+    public function setContainer(ContainerInterface $container)
+    {
+        $this->_container = $container;
     }
 
     /**
@@ -86,6 +97,40 @@ class Dispatcher
             },
             null
         );
+    }
+
+    /**
+     * Reflect dependencies of a callable.
+     *
+     * Build a parameter array specific to the given callable.
+     *
+     * @param ContainerInterface $container
+     *     Container to get parameters from.
+     * @param callable $callable
+     *     Callable to be called with the parameters.
+     *
+     * @return array An array of mixed type parameters.
+     */
+    public static function reflectDependencies(ContainerInterface $container, callable $callable): array
+    {
+        // Note: assume it is a function first.
+        // will array type callables (i.e. instance
+        // method, static method) later.
+        $ref = new ReflectionFunction($callable);
+        return array_map(function (ReflectionParameter $paramDef) use ($container) {
+            $name = $paramDef->getName();
+            $type = $paramDef->getType();
+
+            // has type, try getting variable by type
+            if ($type !== null && $container->has($type->getName())) {
+                return $container->get($type->getName());
+            }
+
+            // no type, or the type not found, find by name
+            return $container->has($name)
+                ? $container->get($name)
+                : null;
+        }, $ref->getParameters());
     }
 
     /**

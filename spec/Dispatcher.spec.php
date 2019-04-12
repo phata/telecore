@@ -1,7 +1,9 @@
 <?php
 
-use \Phata\TeleCore\Dispatcher as UpdateDispatcher;
 use \Phata\TeleCore\Session\RedisSessionFactory;
+use \Phata\TeleCore\Dispatcher as UpdateDispatcher;
+
+require_once __DIR__ . '/' . basename(__FILE__, '.spec.php') . '.dependencies.php';
 
 describe('Dispatcher', function () {
     it('correctly dispatch handler', function () {
@@ -89,4 +91,24 @@ describe('Dispatcher', function () {
         $handler(...$args);
 
     });
+
+    it('correctly reflects dependencies of function callables', function () {
+
+        $container = new myTest\Dummy\Container([
+            'foo' => 'Foo',
+            'bar' => 'Bar',
+            myTest\Dummy\DummyVar::class => new myTest\Dummy\DummyVar('Dummy'),
+        ]);
+        $params = UpdateDispatcher::reflectDependencies($container, function ($foo, $bar, myTest\Dummy\DummyVar $dummy) {
+            $vars['foo'] = $foo;
+            $vars['bar'] = $bar;
+            $vars['dummy'] = $dummy;
+        });
+
+        expect($params[0])->toBe('Foo');
+        expect($params[1])->toBe('Bar');
+        expect($params[2]->get())->toBe('Dummy');
+
+    });
+
 });
