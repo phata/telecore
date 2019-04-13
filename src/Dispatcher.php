@@ -7,6 +7,7 @@ use Psr\Container\NotFoundExceptionInterface;
 use Psr\Log\LoggerInterface;
 use TelegramBot\Api\BotApi;
 use Phata\TeleCore\Session\Factory as SessionFactory;
+use Phata\TeleCore\Session\Session;
 use \Exception;
 use \ReflectionFunction;
 use \ReflectionParameter;
@@ -58,20 +59,20 @@ class Dispatcher
      * Add a handler specific for certain command in the "message" type
      * update.
      *
-     * @param string $command The command, with or without slash prefix,
+     * @param string $commandStr The command, with or without slash prefix,
      *                        for routing.
      * @param callable $handler Handler function for the command. With
      *                 a function signature of:
      *                 function (object $command, object $request)
      */
-    public function addCommand(string $command, callable $handler): void
+    public function addCommand(string $commandStr, callable $handler): void
     {
-        $command = '/' . ltrim($command, '/');
-        if (isset($this->_cmds[$command])) {
-            throw new \Exception(sprintf('handler for command "%s" already exists.', $command));
+        $commandStr = '/' . ltrim($commandStr, '/');
+        if (isset($this->_cmds[$commandStr])) {
+            throw new \Exception(sprintf('handler for command "%s" already exists.', $commandStr));
             return;
         }
-        $this->_cmds[$command] = $handler;
+        $this->_cmds[$commandStr] = $handler;
     }
 
     /**
@@ -151,20 +152,46 @@ class Dispatcher
         }
 
         // if there is a command in the message
-        $command = substr(
+        $commandStr = substr(
             $request->message->text,
             $commands[0]->offset,
             $commands[0]->length
         );
-        if (isset($this->_cmds[$command])) {
+
+        // fill command and request to container, if exists
+        if ($this->_container === null) {
+            // should throw new exception
+            throw new Exception("Container not found.");
+        }
+        $session = $this->_sessionFactory->fromMessage($request->message);
+
+        // Fill the container with variables about the
+        // request.
+        //
+        // TODO: might separate this into some sort of
+        // "container driver" for not all container has
+        // a `set` method.
+        $container = $this->_container;
+        $container->set('command', $commands[0]);
+
+        // if command handler found for the given command string,
+        // dispatch the handler.
+        if (isset($this->_cmds[$commandStr])) {
+            $params = static::reflectDependencies(
+                $container,
+                $this->_cmds[$commandStr]
+            );
+            $this->_logger->debug("command found");
             return [
-                $this->_cmds[$command],
-                [
-                    $commands[0],
-                    $request,
-                ],
+                $this->_cmds[$commandStr],
+                $params,
             ];
         }
+
+        // no command handler found for the given command string.
+        $this->_logger->debug('command handler not found: ' . $commandStr);
+        throw new Exception('command handler not found: ' . $commandStr);
+        return [null, []]; // return an array for list to extract anyway
     }
 
     /**
@@ -175,12 +202,12 @@ class Dispatcher
      */
     public function handleCommandMessage(string $type, $request): void
     {
-        list($commandHandler, $args) = $this->dispatchCommand($request);
-        if ($commandHandler === null){
+        list($commandHandler, $params) = $this->dispatchCommand($request);
+        if ($commandHandler === null) {
             // do nothing
             return;
         }
-        $commandHandler(...$args);
+        $commandHandler(...$params);
     }
 
     /**
