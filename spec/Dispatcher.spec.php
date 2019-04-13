@@ -11,6 +11,7 @@ describe('Dispatcher', function () {
         $updateDispatcher = new UpdateDispatcher();
         $updateDispatcher->setLogger($this->logger);
         $updateDispatcher->setSessionFactory(new RedisSessionFactory($this->redisClient));
+        $updateDispatcher->setContainer(new myTest\Dummy\Container());
         $testHandler = function ($type, $request) use ($store) {
             $store->type = $type;
             $store->request = $request;
@@ -52,6 +53,7 @@ describe('Dispatcher', function () {
         $updateDispatcher = new UpdateDispatcher();
         $updateDispatcher->setLogger($this->logger);
         $updateDispatcher->setSessionFactory(new RedisSessionFactory($this->redisClient));
+        $updateDispatcher->setContainer(new myTest\Dummy\Container());
         $testHandler = function ($command, $request) use ($store) {
         };
         $updateDispatcher->addCommand('/hello', $testHandler);
@@ -104,6 +106,50 @@ describe('Dispatcher', function () {
             $vars['bar'] = $bar;
             $vars['dummy'] = $dummy;
         });
+
+        expect($params[0])->toBe('Foo');
+        expect($params[1])->toBe('Bar');
+        expect($params[2]->get())->toBe('Dummy');
+
+    });
+
+    it('correctly reflects dependencies of object instance method callables', function () {
+
+        $container = new myTest\Dummy\Container([
+            'foo' => 'Foo',
+            'bar' => 'Bar',
+            myTest\Dummy\DummyVar::class => new myTest\Dummy\DummyVar('Dummy'),
+        ]);
+        $obj = new class{
+            public function method($foo, $bar, myTest\Dummy\DummyVar $dummy) {
+                $vars['foo'] = $foo;
+                $vars['bar'] = $bar;
+                $vars['dummy'] = $dummy;
+            }
+        };
+        $params = UpdateDispatcher::reflectDependencies($container, [$obj, 'method']);
+
+        expect($params[0])->toBe('Foo');
+        expect($params[1])->toBe('Bar');
+        expect($params[2]->get())->toBe('Dummy');
+
+    });
+
+    it('correctly reflects dependencies of class static method callables', function () {
+
+        $container = new myTest\Dummy\Container([
+            'foo' => 'Foo',
+            'bar' => 'Bar',
+            myTest\Dummy\DummyVar::class => new myTest\Dummy\DummyVar('Dummy'),
+        ]);
+        class myLocalTest1 {
+            public static function method($foo, $bar, myTest\Dummy\DummyVar $dummy) {
+                $vars['foo'] = $foo;
+                $vars['bar'] = $bar;
+                $vars['dummy'] = $dummy;
+            }
+        };
+        $params = UpdateDispatcher::reflectDependencies($container, [myLocalTest1::class, 'method']);
 
         expect($params[0])->toBe('Foo');
         expect($params[1])->toBe('Bar');

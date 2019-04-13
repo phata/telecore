@@ -9,6 +9,7 @@ use TelegramBot\Api\BotApi;
 use Phata\TeleCore\Session\Factory as SessionFactory;
 use Phata\TeleCore\Session\Session;
 use \Exception;
+use \ReflectionClass;
 use \ReflectionFunction;
 use \ReflectionParameter;
 
@@ -114,10 +115,12 @@ class Dispatcher
      */
     public static function reflectDependencies(ContainerInterface $container, callable $callable): array
     {
-        // Note: assume it is a function first.
-        // will array type callables (i.e. instance
-        // method, static method) later.
-        $ref = new ReflectionFunction($callable);
+        // reflect the callable function or method for arguments
+        $ref = !is_array($callable)
+            ? new ReflectionFunction($callable)
+            : (new ReflectionClass($callable[0]))->getMethod($callable[1]);
+
+        // map the dependencies
         return array_map(function (ReflectionParameter $paramDef) use ($container) {
             $name = $paramDef->getName();
             $type = $paramDef->getType();

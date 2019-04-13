@@ -13,9 +13,14 @@ class Container implements ContainerInterface
 
     private $definitions;
 
-    public function __construct(?array $definitions)
+    public function __construct(?array $definitions = null)
     {
         $this->definitions = $definitions ?? [];
+    }
+
+    public function set($id, $value)
+    {
+        $this->definitions[$id] = $value;
     }
 
     public function has($id)
