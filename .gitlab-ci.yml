@@ -12,11 +12,15 @@
     - php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
     - php composer-setup.php --install-dir=$HOME/bin --filename=composer
     - php -r "unlink('composer-setup.php');"
-    - export PATH=$HOME/bin:$HOME/.phpunit/vendor/bin:$HOME/.composer/vendor/bin:$PATH
+    - export PATH=$HOME/bin:$HOME/.composer/vendor/bin:$PATH
     # install dependencies for test
     - composer install --prefer-dist --no-interaction --no-progress
   script:
     - composer test
+  services:
+    - redis:latest
+  variables:
+    REDIS_URL: tcp://redis:6379
   tags:
     - git-annex
 
