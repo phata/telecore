@@ -1,0 +1,38 @@
+.test:
+  stage: test
+  before_script:
+    # install apt packages
+    - apt-get update -qy
+    - apt-get install -qy git zip unzip zlib1g-dev gettext locales
+    # properly setup php
+    - cp -pdf /usr/local/etc/php/php.ini-development /usr/local/etc/php/php.ini
+    - php --ini
+    # install composer
+    - mkdir $HOME/bin
+    - php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+    - php composer-setup.php --install-dir=$HOME/bin --filename=composer
+    - php -r "unlink('composer-setup.php');"
+    - export PATH=$HOME/bin:$HOME/.composer/vendor/bin:$PATH
+    # install dependencies for test
+    - composer install --prefer-dist --no-interaction --no-progress
+  script:
+    - composer test
+  services:
+    - redis:latest
+  variables:
+    REDIS_URL: tcp://redis:6379
+  tags:
+    - git-annex
+
+php:7.1:
+  image: php:7.1
+  extends: .test
+
+php:7.2:
+  image: php:7.2
+  extends: .test
+
+php:7.3:
+  image: php:7.3
+  extends: .test
+

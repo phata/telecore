@@ -41,7 +41,7 @@ class RedisSession implements Session
     public static function fromMessage(
         Client $client,
         $message,
-        callable $hasher=null
+        ?callable $hasher = null
     ): Session {
         $chatID = \str_replace('/', '_', \password_hash($message->chat->id, PASSWORD_DEFAULT));
         $userID = \str_replace('/', '_', \password_hash($message->from->id, PASSWORD_DEFAULT));
@@ -69,7 +69,7 @@ class RedisSession implements Session
      *                          implementation default.
      *                          Default null.
      */
-    public function set(string $key, $value, ?int $expires=null)
+    public function set(string $key, $value, ?int $expires = null)
     {
         $expires = $expires ?? strtotime('+1 week');
 
@@ -91,7 +91,7 @@ class RedisSession implements Session
      *
      * @return mixed Value stored.
      */
-    public function get(string $key, $defaultValue=null)
+    public function get(string $key, $defaultValue = null)
     {
         // TODO: implement _client
         // TODO: check if this is the proper way to handle empty

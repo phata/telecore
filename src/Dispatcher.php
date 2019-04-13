@@ -2,14 +2,22 @@
 
 namespace Phata\TeleCore;
 
+use Psr\Container\ContainerInterface;
+use Psr\Container\NotFoundExceptionInterface;
 use Psr\Log\LoggerInterface;
 use TelegramBot\Api\BotApi;
 use Phata\TeleCore\Session\Factory as SessionFactory;
+use Phata\TeleCore\Session\Session;
+use \Exception;
+use \ReflectionClass;
+use \ReflectionFunction;
+use \ReflectionParameter;
 
 class Dispatcher
 {
     private $_cmds = [];
     private $_handlers = [];
+    private $_container = null;
     private $_sessionFactory = null;
     private $_logger = null;
 
@@ -43,24 +51,29 @@ class Dispatcher
         $this->_logger = $logger;
     }
 
+    public function setContainer(ContainerInterface $container)
+    {
+        $this->_container = $container;
+    }
+
     /**
      * Add a handler specific for certain command in the "message" type
      * update.
      *
-     * @param string $command The command, with or without slash prefix,
+     * @param string $commandStr The command, with or without slash prefix,
      *                        for routing.
      * @param callable $handler Handler function for the command. With
      *                 a function signature of:
      *                 function (object $command, object $request)
      */
-    public function addCommand(string $command, callable $handler): void
+    public function addCommand(string $commandStr, callable $handler): void
     {
-        $command = '/' . ltrim($command, '/');
-        if (isset($this->_cmds[$command])) {
-            throw new \Exception(sprintf('handler for command "%s" already exists.', $command));
+        $commandStr = '/' . ltrim($commandStr, '/');
+        if (isset($this->_cmds[$commandStr])) {
+            throw new \Exception(sprintf('handler for command "%s" already exists.', $commandStr));
             return;
         }
-        $this->_cmds[$command] = $handler;
+        $this->_cmds[$commandStr] = $handler;
     }
 
     /**
@@ -89,6 +102,42 @@ class Dispatcher
     }
 
     /**
+     * Reflect dependencies of a callable.
+     *
+     * Build a parameter array specific to the given callable.
+     *
+     * @param ContainerInterface $container
+     *     Container to get parameters from.
+     * @param callable $callable
+     *     Callable to be called with the parameters.
+     *
+     * @return array An array of mixed type parameters.
+     */
+    public static function reflectDependencies(ContainerInterface $container, callable $callable): array
+    {
+        // reflect the callable function or method for arguments
+        $ref = !is_array($callable)
+            ? new ReflectionFunction($callable)
+            : (new ReflectionClass($callable[0]))->getMethod($callable[1]);
+
+        // map the dependencies
+        return array_map(function (ReflectionParameter $paramDef) use ($container) {
+            $name = $paramDef->getName();
+            $type = $paramDef->getType();
+
+            // has type, try getting variable by type
+            if ($type !== null && $container->has($type->getName())) {
+                return $container->get($type->getName());
+            }
+
+            // no type, or the type not found, find by name
+            return $container->has($name)
+                ? $container->get($name)
+                : null;
+        }, $ref->getParameters());
+    }
+
+    /**
      * Dispatch commands stored in this dispatcher.
      * Meant to be used by handleCommandMessage.
      *
@@ -106,20 +155,46 @@ class Dispatcher
         }
 
         // if there is a command in the message
-        $command = substr(
+        $commandStr = substr(
             $request->message->text,
             $commands[0]->offset,
             $commands[0]->length
         );
-        if (isset($this->_cmds[$command])) {
+
+        // fill command and request to container, if exists
+        if ($this->_container === null) {
+            // should throw new exception
+            throw new Exception("Container not found.");
+        }
+        $session = $this->_sessionFactory->fromMessage($request->message);
+
+        // Fill the container with variables about the
+        // request.
+        //
+        // TODO: might separate this into some sort of
+        // "container driver" for not all container has
+        // a `set` method.
+        $container = $this->_container;
+        $container->set('command', $commands[0]);
+
+        // if command handler found for the given command string,
+        // dispatch the handler.
+        if (isset($this->_cmds[$commandStr])) {
+            $params = static::reflectDependencies(
+                $container,
+                $this->_cmds[$commandStr]
+            );
+            $this->_logger->debug("command found");
             return [
-                $this->_cmds[$command],
-                [
-                    $commands[0],
-                    $request,
-                ],
+                $this->_cmds[$commandStr],
+                $params,
             ];
         }
+
+        // no command handler found for the given command string.
+        $this->_logger->debug('command handler not found: ' . $commandStr);
+        throw new Exception('command handler not found: ' . $commandStr);
+        return [null, []]; // return an array for list to extract anyway
     }
 
     /**
@@ -130,12 +205,12 @@ class Dispatcher
      */
     public function handleCommandMessage(string $type, $request): void
     {
-        list($commandHandler, $args) = $this->dispatchCommand($request);
-        if ($commandHandler === null){
+        list($commandHandler, $params) = $this->dispatchCommand($request);
+        if ($commandHandler === null) {
             // do nothing
             return;
         }
-        $commandHandler(...$args);
+        $commandHandler(...$params);
     }
 
     /**
@@ -193,6 +268,9 @@ class Dispatcher
 
         // TODO: use middleware for logging (only for debug).
 
+        // set request to container
+        $this->_container->set('request', $request);
+
         // route different type of updates:
         //
         // * Message message
@@ -207,20 +285,33 @@ class Dispatcher
         //
         foreach ($this->_handlers as $type => $handlers) {
             if (isset($request->$type)) {
+                $session = null;
+
                 switch ($type) {
                 case 'message':
                     $this->_logger->info("message: getting sessionFactory: " . var_export(isset($this->_sessionFactory), true));
                     $this->_logger->info("message: getting message: " . json_encode($request->$type));
-                    $request->session = $this->_sessionFactory->fromMessage($request->$type);
+                    $session = $this->_sessionFactory->fromMessage($request->$type);
                     break;
                 case 'callback_query':
                     $this->_logger->info("callback_query: getting message: " . json_encode($request->$type->message));
-                    $request->session = $this->_sessionFactory->fromMessage($request->$type->message);
+                    $session = $this->_sessionFactory->fromMessage($request->$type->message);
                     break;
                 }
+
+                // set container request $type and $session.
+                $this->_container->set('type', $type);
+                $this->_container->set('session', $session);
+                $this->_container->set(Session::class, $session);
+
+                // reflect the dependencies of the handler.
+                $params = static::reflectDependencies(
+                    $this->_container,
+                    $this->_handlers[$type]
+                );
                 return [
                     $this->_handlers[$type],
-                    [$type, $request],
+                    $params,
                 ];
             }
         }
