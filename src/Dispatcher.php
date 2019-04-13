@@ -265,6 +265,9 @@ class Dispatcher
 
         // TODO: use middleware for logging (only for debug).
 
+        // set request to container
+        $this->_container->set('request', $request);
+
         // route different type of updates:
         //
         // * Message message
@@ -279,20 +282,33 @@ class Dispatcher
         //
         foreach ($this->_handlers as $type => $handlers) {
             if (isset($request->$type)) {
+                $session = null;
+
                 switch ($type) {
                 case 'message':
                     $this->_logger->info("message: getting sessionFactory: " . var_export(isset($this->_sessionFactory), true));
                     $this->_logger->info("message: getting message: " . json_encode($request->$type));
-                    $request->session = $this->_sessionFactory->fromMessage($request->$type);
+                    $session = $this->_sessionFactory->fromMessage($request->$type);
                     break;
                 case 'callback_query':
                     $this->_logger->info("callback_query: getting message: " . json_encode($request->$type->message));
-                    $request->session = $this->_sessionFactory->fromMessage($request->$type->message);
+                    $session = $this->_sessionFactory->fromMessage($request->$type->message);
                     break;
                 }
+
+                // set container request $type and $session.
+                $this->_container->set('type', $type);
+                $this->_container->set('session', $session);
+                $this->_container->set(Session::class, $session);
+
+                // reflect the dependencies of the handler.
+                $params = static::reflectDependencies(
+                    $this->_container,
+                    $this->_handlers[$type]
+                );
                 return [
                     $this->_handlers[$type],
-                    [$type, $request],
+                    $params,
                 ];
             }
         }
