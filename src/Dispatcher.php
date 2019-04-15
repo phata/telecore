@@ -21,39 +21,27 @@ class Dispatcher
     private $_sessionFactory = null;
     private $_logger = null;
 
-    public function __construct()
-    {
+    /**
+     * Constructor function.
+     *
+     * @param ContainerInterface $container
+     *     Container for dependency injection.
+     * @param LoggerInterface $logger
+     *     Logger for logging dispatch.
+     * @param SessionFactory $sessionFactory
+     *     Session factory for accessing session.
+     */
+    public function __construct(
+        ContainerInterface $container,
+        LoggerInterface $logger,
+        SessionFactory $sessionFactory
+    ) {
         $this->_handlers = [
             'message' => [$this, 'handleCommandMessage'],
         ];
-    }
-
-    /**
-     * Set the session factory to dispatcher.
-     *
-     * @param SessionFactory $sessionFactory
-     * @return void
-     */
-    public function setSessionFactory(SessionFactory $sessionFactory)
-    {
-        $this->_sessionFactory = $sessionFactory;
-    }
-
-    /**
-     * Set the session factory to dispatcher.
-     *
-     * @param LoggerInterface $sessionFactory
-     *
-     * @return void
-     */
-    public function setLogger(LoggerInterface $logger)
-    {
-        $this->_logger = $logger;
-    }
-
-    public function setContainer(ContainerInterface $container)
-    {
         $this->_container = $container;
+        $this->_logger = $logger;
+        $this->_sessionFactory = $sessionFactory;
     }
 
     /**
@@ -92,7 +80,9 @@ class Dispatcher
             $message->entities,
             function ($carry, $item) {
                 if ($item->type === 'bot_command' && ($item->offset == 0)) {
-                    if ($carry === null) $carry = [];
+                    if ($carry === null) {
+                        $carry = [];
+                    }
                     $carry[] = $item;
                 }
                 return $carry;
@@ -252,7 +242,8 @@ class Dispatcher
         $this->_handlers[$type] = $handler;
     }
 
-    public function listHandlers() {
+    public function listHandlers()
+    {
         return array_keys($this->_handlers);
     }
 
@@ -288,20 +279,19 @@ class Dispatcher
                 $session = null;
 
                 switch ($type) {
-                case 'message':
-                    $this->_logger->info("message: getting sessionFactory: " . var_export(isset($this->_sessionFactory), true));
-                    $this->_logger->info("message: getting message: " . json_encode($request->$type));
-                    $session = $this->_sessionFactory->fromMessage($request->$type);
-                    break;
-                case 'callback_query':
-                    $this->_logger->info("callback_query: getting message: " . json_encode($request->$type->message));
-                    $session = $this->_sessionFactory->fromMessage($request->$type->message);
-                    break;
+                    case 'message':
+                        $this->_logger->info("message: getting sessionFactory: " . var_export(isset($this->_sessionFactory), true));
+                        $this->_logger->info("message: getting message: " . json_encode($request->$type));
+                        $session = $this->_sessionFactory->fromMessage($request->$type);
+                        break;
+                    case 'callback_query':
+                        $this->_logger->info("callback_query: getting message: " . json_encode($request->$type->message));
+                        $session = $this->_sessionFactory->fromMessage($request->$type->message);
+                        break;
                 }
 
                 // set container request $type and $session.
                 $this->_container->set('type', $type);
-                $this->_container->set('session', $session);
                 $this->_container->set(Session::class, $session);
 
                 // reflect the dependencies of the handler.

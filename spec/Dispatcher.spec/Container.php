@@ -38,21 +38,3 @@ class Container implements ContainerInterface
         return $this->definitions[$id];
     }
 }
-
-/**
- * A dummy variable wrapper for test.
- */
-class DummyVar
-{
-    private $value;
-
-    public function __construct($value)
-    {
-        $this->value = $value;
-    }
-
-    public function get()
-    {
-        return $this->value;
-    }
-}
