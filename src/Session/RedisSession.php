@@ -11,7 +11,7 @@ use \Predis\Client;
  * @category Class
  * @package  Phata\TeleCore
  */
-class RedisSession implements Session
+class RedisSession implements SessionInterface
 {
 
     private $_client;
@@ -30,26 +30,6 @@ class RedisSession implements Session
     }
 
     /**
-     * Undocumented function
-     *
-     * @param Client   $client  Predis client.
-     * @param object   $message Message object.
-     * @param callable $hasher  A callable that takes string and hash it.
-     *
-     * @return Session
-     */
-    public static function fromMessage(
-        Client $client,
-        $message,
-        ?callable $hasher = null
-    ): Session {
-        $chatID = \str_replace('/', '_', \password_hash($message->chat->id, PASSWORD_DEFAULT));
-        $userID = \str_replace('/', '_', \password_hash($message->from->id, PASSWORD_DEFAULT));
-        $namespace = "session://chat-{$chatID}/user-{$userID}/";
-        return new RedisSession($client, $namespace);
-    }
-
-    /**
      * Get the storage namespace for the specific session.
      *
      * @return string
@@ -60,20 +40,12 @@ class RedisSession implements Session
     }
 
     /**
-     * Set a key value pair in the session
-     *
-     * @param string   $key     Storage key.
-     * @param mixed    $value   Value to be stored.
-     * @param int|null $expires Unix timestamp for expiration.
-     *                          Set to null will fallback to
-     *                          implementation default.
-     *                          Default null.
+     * {@inheritDoc}
      */
     public function set(string $key, $value, ?int $expires = null)
     {
+        // TODO: need to lock (with redis setnx)
         $expires = $expires ?? strtotime('+1 week');
-
-        // TODO: implement _client
         $response = $this->_client
             ->transaction()
             ->set($this->getNamespace() . $key, serialize($value))
@@ -83,18 +55,12 @@ class RedisSession implements Session
     }
 
     /**
-     * Get a value from the session
-     *
-     * @param string $key          Storage key
-     * @param mixed  $defaultValue Value to use if not set.
-     *                             Default null.
-     *
-     * @return mixed Value stored.
+     * {@inheritDoc}
      */
     public function get(string $key, $defaultValue = null)
     {
-        // TODO: implement _client
         // TODO: check if this is the proper way to handle empty
+        // TODO: need to lock (with redis setnx)
         $response = $this->_client
             ->get($this->getNamespace() . $key);
         return !empty($response) ? unserialize($response) : $defaultValue;

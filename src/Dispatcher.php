@@ -6,8 +6,8 @@ use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 use Psr\Log\LoggerInterface;
 use TelegramBot\Api\BotApi;
-use Phata\TeleCore\Session\Factory as SessionFactory;
-use Phata\TeleCore\Session\Session;
+use Phata\TeleCore\Session\FactoryInterface as SessionFactory;
+use Phata\TeleCore\Session\SessionInterface as Session;
 use \Exception;
 use \ReflectionClass;
 use \ReflectionFunction;
@@ -280,13 +280,15 @@ class Dispatcher
 
                 switch ($type) {
                     case 'message':
+                        $message = $request->message;
                         $this->_logger->info("message: getting sessionFactory: " . var_export(isset($this->_sessionFactory), true));
-                        $this->_logger->info("message: getting message: " . json_encode($request->$type));
-                        $session = $this->_sessionFactory->fromMessage($request->$type);
+                        $this->_logger->info("message: getting message: " . json_encode($message));
+                        $session = $this->_sessionFactory->getChatUserSession($message->chat, $message->from);
                         break;
                     case 'callback_query':
-                        $this->_logger->info("callback_query: getting message: " . json_encode($request->$type->message));
-                        $session = $this->_sessionFactory->fromMessage($request->$type->message);
+                        $message = $request->$type->message;
+                        $this->_logger->info("callback_query: getting message: " . json_encode($message));
+                        $session = $this->_sessionFactory->getChatUserSession($message->chat, $message->from);
                         break;
                 }
 
