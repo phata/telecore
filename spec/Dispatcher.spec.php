@@ -3,15 +3,18 @@
 use \Phata\TeleCore\Session\RedisSessionFactory;
 use \Phata\TeleCore\Dispatcher as UpdateDispatcher;
 
-require_once __DIR__ . '/' . basename(__FILE__, '.spec.php') . '.dependencies.php';
+require_once __DIR__ . '/' . basename(__FILE__, '.php') . '/Container.php';
+require_once __DIR__ . '/' . basename(__FILE__, '.php') . '/DummyVar.php';
+require_once __DIR__ . '/' . basename(__FILE__, '.php') . '/DummyClass.php';
 
 describe('Dispatcher', function () {
     it('correctly dispatch handler', function () {
         $store = (object) [];
-        $updateDispatcher = new UpdateDispatcher();
-        $updateDispatcher->setLogger($this->logger);
-        $updateDispatcher->setSessionFactory(new RedisSessionFactory($this->redisClient));
-        $updateDispatcher->setContainer(new myTest\Dummy\Container());
+        $updateDispatcher = new UpdateDispatcher(
+            new myTest\Dummy\Container(),
+            $this->logger,
+            new RedisSessionFactory($this->redisClient)
+        );
         $testHandler = function ($type, $request) use ($store) {
             $store->type = $type;
             $store->request = $request;
@@ -39,8 +42,7 @@ describe('Dispatcher', function () {
         expect(isset($store->request))->toBeTruthy();
         expect(isset($store->request->inline_query))->toBeTruthy();
         expect(isset($store->request->inline_query->hello))->toBeTruthy();
-        if (
-            isset($store->request)
+        if (isset($store->request)
             && isset($store->request->inline_query)
             && isset($store->request->inline_query->hello)
         ) {
@@ -50,10 +52,11 @@ describe('Dispatcher', function () {
 
     it('correctly dispatch command handler', function () {
         $store = (object) [];
-        $updateDispatcher = new UpdateDispatcher();
-        $updateDispatcher->setLogger($this->logger);
-        $updateDispatcher->setSessionFactory(new RedisSessionFactory($this->redisClient));
-        $updateDispatcher->setContainer(new myTest\Dummy\Container());
+        $updateDispatcher = new UpdateDispatcher(
+            new myTest\Dummy\Container(),
+            $this->logger,
+            new RedisSessionFactory($this->redisClient)
+        );
         $testHandler = function ($command, $request) use ($store) {
         };
         $updateDispatcher->addCommand('/hello', $testHandler);
@@ -91,7 +94,6 @@ describe('Dispatcher', function () {
 
         expect($handler[1])->toBe('handleCommandMessage');
         $handler(...$args);
-
     });
 
     it('correctly reflects dependencies of function callables', function () {
@@ -110,7 +112,6 @@ describe('Dispatcher', function () {
         expect($params[0])->toBe('Foo');
         expect($params[1])->toBe('Bar');
         expect($params[2]->get())->toBe('Dummy');
-
     });
 
     it('correctly reflects dependencies of object instance method callables', function () {
@@ -121,7 +122,8 @@ describe('Dispatcher', function () {
             myTest\Dummy\DummyVar::class => new myTest\Dummy\DummyVar('Dummy'),
         ]);
         $obj = new class{
-            public function method($foo, $bar, myTest\Dummy\DummyVar $dummy) {
+            public function method($foo, $bar, myTest\Dummy\DummyVar $dummy)
+            {
                 $vars['foo'] = $foo;
                 $vars['bar'] = $bar;
                 $vars['dummy'] = $dummy;
@@ -132,7 +134,6 @@ describe('Dispatcher', function () {
         expect($params[0])->toBe('Foo');
         expect($params[1])->toBe('Bar');
         expect($params[2]->get())->toBe('Dummy');
-
     });
 
     it('correctly reflects dependencies of class static method callables', function () {
@@ -142,19 +143,10 @@ describe('Dispatcher', function () {
             'bar' => 'Bar',
             myTest\Dummy\DummyVar::class => new myTest\Dummy\DummyVar('Dummy'),
         ]);
-        class myLocalTest1 {
-            public static function method($foo, $bar, myTest\Dummy\DummyVar $dummy) {
-                $vars['foo'] = $foo;
-                $vars['bar'] = $bar;
-                $vars['dummy'] = $dummy;
-            }
-        };
-        $params = UpdateDispatcher::reflectDependencies($container, [myLocalTest1::class, 'method']);
+        $params = UpdateDispatcher::reflectDependencies($container, [myTest\Dummy\DummyClass::class, 'method']);
 
         expect($params[0])->toBe('Foo');
         expect($params[1])->toBe('Bar');
         expect($params[2]->get())->toBe('Dummy');
-
     });
-
 });
