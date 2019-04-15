@@ -156,7 +156,6 @@ class Dispatcher
             // should throw new exception
             throw new Exception("Container not found.");
         }
-        $session = $this->_sessionFactory->fromMessage($request->message);
 
         // Fill the container with variables about the
         // request.
