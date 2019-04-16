@@ -50,52 +50,6 @@ describe('Dispatcher', function () {
         }
     });
 
-    it('correctly dispatch command handler', function () {
-        $store = (object) [];
-        $updateDispatcher = new UpdateDispatcher(
-            new myTest\Dummy\Container(),
-            $this->logger,
-            new RedisSessionFactory($this->redisClient)
-        );
-        $testHandler = function ($command, $request) use ($store) {
-        };
-        $updateDispatcher->addCommand('/hello', $testHandler);
-        $routeInfo = $updateDispatcher->dispatch(json_decode(json_encode([
-            'message' => [
-                'from' => ['id' => 123],
-                'chat' => ['id' => 456],
-                'entities' => [
-                    'type' => 'bot_command',
-                    'offset' => 0,
-                    'length' => 6,
-                ],
-                'text' => '/hello world',
-            ],
-        ])));
-
-        // get routing information
-        list($handler, $args) = $routeInfo;
-
-        // inspect callabke
-        expect(is_array($handler))->toBeTruthy();
-        if (!is_array($handler)) {
-            return;
-        }
-
-        expect(sizeof($handler))->toBe(2);
-        if (sizeof($handler) !== 2) {
-            return;
-        }
-
-        expect($handler[0])->toBe($updateDispatcher);
-        if ($handler[0] != $updateDispatcher) {
-            return;
-        }
-
-        expect($handler[1])->toBe('handleCommandMessage');
-        $handler(...$args);
-    });
-
     it('correctly reflects dependencies of function callables', function () {
 
         $container = new myTest\Dummy\Container([
@@ -144,6 +98,23 @@ describe('Dispatcher', function () {
             myTest\Dummy\DummyVar::class => new myTest\Dummy\DummyVar('Dummy'),
         ]);
         $params = UpdateDispatcher::reflectDependencies($container, [myTest\Dummy\DummyClass::class, 'method']);
+
+        expect($params[0])->toBe('Foo');
+        expect($params[1])->toBe('Bar');
+        expect($params[2]->get())->toBe('Dummy');
+    });
+
+    it('correctly reflects dependencies of class static method callables with overrides', function () {
+
+        $params = UpdateDispatcher::reflectDependencies(
+            new myTest\Dummy\Container(),
+            [myTest\Dummy\DummyClass::class, 'method'],
+            [
+                'foo' => 'Foo',
+                'bar' => 'Bar',
+                myTest\Dummy\DummyVar::class => new myTest\Dummy\DummyVar('Dummy'),
+            ]
+        );
 
         expect($params[0])->toBe('Foo');
         expect($params[1])->toBe('Bar');
