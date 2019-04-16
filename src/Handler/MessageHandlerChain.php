@@ -29,20 +29,21 @@ class MessageHandlerChain implements MessageHandlerInterface
      * @param MessageHandlerInterface $handler
      *     Message handler.
      *
-     * @return void
+     * @return self
      */
     public function addHandler(MessageHandlerInterface $handler)
     {
         $this->handlers[] = $handler;
+        return $this;
     }
 
     /**
      * {@inheritDoc}
      */
-    public function handleMessage($request)
+    public function handleMessage($request): bool
     {
         foreach ($this->handlers as $handler) {
-            if ($handler($request) !== false) {
+            if ($handler->handleMessage($request) !== false) {
                 return true;
             }
         }
