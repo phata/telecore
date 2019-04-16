@@ -35,9 +35,6 @@ class Dispatcher
         LoggerInterface $logger,
         SessionFactoryInterface $sessionFactory
     ) {
-        $this->_handlers = [
-            'message' => [$this, 'handleCommandMessage'],
-        ];
         $this->_container = $container;
         $this->_logger = $logger;
         $this->_sessionFactory = $sessionFactory;
